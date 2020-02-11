@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         YouTube Spam Blocker
 // @namespace    https://monatann.azurewebsites.net/
-// @version      1.0
+// @version      1.1
 // @description  Block spam (on VTuber chat)
 // @author       monatann
-// @match        https://www.youtube.com/watch*
+// @match        https://www.youtube.com/*
 // @require      https://monatann.azurewebsites.net/files/nicoaddon/script/jquery-3.2.1.js
 // @grant        none
 // ==/UserScript==
@@ -16,7 +16,7 @@
         "video",
         "vide0"
     ];
-    var debug = false;
+    var debug = true;
 
 
     var iframe;
