@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Spam Blocker
 // @namespace    https://monatann.azurewebsites.net/
-// @version      1.2
+// @version      1.3
 // @description  Block spam (on VTuber chat)
 // @author       monatann
 // @match        https://www.youtube.com/*
@@ -10,14 +10,14 @@
 // ==/UserScript==
 
 (function() {
-    var nameLimit = 5;
+    var nameLimit = 10;
     var keepCommentLimit = 500;
     var forceBanName = [
         "watch",
         "video",
         "vide0"
     ];
-    var debug = true;
+    var debug = false;
 
 
     var iframe;
@@ -87,31 +87,31 @@
                 for(var i=0;i<banArray.length;i++){
                     temp = banArray[i];
                     if(temp == comment1name){
-                        jQuery(comment1).remove();
+                        jQuery(comment1).hide();
                         if(debug){
                         console.log("Spam user: " + temp + " :" + comment1text);
                         }
                     }
                     if(temp == comment2name){
-                        jQuery(comment2).remove();
+                        jQuery(comment2).hide();
                         if(debug){
                             console.log("Spam user: " + temp + " :" + comment2text);
                         }
                     }
                     if(temp == comment3name){
-                        jQuery(comment3).remove();
+                        jQuery(comment3).hide();
                         if(debug){
                             console.log("Spam user: " + temp + " :" + comment3text);
                         }
                     }
                     if(temp == comment4name){
-                        jQuery(comment4).remove();
+                        jQuery(comment4).hide();
                         if(debug){
                             console.log("Spam user: " + temp + " :" + comment4text);
                         }
                     }
                     if(temp == comment5name){
-                        jQuery(comment5).remove();
+                        jQuery(comment5).hide();
                         if(debug){
                             console.log("Spam user: " + temp + " :" + comment5text);
                         }
