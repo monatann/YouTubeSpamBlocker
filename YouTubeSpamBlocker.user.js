@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Spam Blocker
 // @namespace    https://monatann.azurewebsites.net/
-// @version      1.1
+// @version      1.2
 // @description  Block spam (on VTuber chat)
 // @author       monatann
 // @match        https://www.youtube.com/*
@@ -10,7 +10,8 @@
 // ==/UserScript==
 
 (function() {
-    var nameLimit = 15;
+    var nameLimit = 5;
+    var keepCommentLimit = 500;
     var forceBanName = [
         "watch",
         "video",
@@ -74,7 +75,7 @@
         if(comment1html != null && comment2html != null && comment3html != null && comment4html != null && comment5html != null && comment1name != ""){
             if(comment1html.length > 0 && comment2html.length > 0 && comment3html.length > 0 && comment4html.length > 0 && comment5html.length > 0){
 
-                if(nameArray.length > 200){
+                if(nameArray.length > keepCommentLimit){
                     for(var i2=0;i2<5;i2++){
                         nameArray.shift();
                         textArray.shift();
