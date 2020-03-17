@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Spam Blocker
 // @namespace    https://monatann.azurewebsites.net/
-// @version      1.5
+// @version      1.6
 // @description  Block spam (on VTuber chat)
 // @author       monatann
 // @match        https://www.youtube.com/*
@@ -190,7 +190,7 @@ function spamCheck(num, comment){
                 }
             }else{//絵文字がない
                 //既に警告されていない - 警告
-                if(find(warningArray, commentName)){
+                if(!find(warningArray, commentName)){
                     if(commentName.length > nameLimit){
                         if(debug){
                             console.log("Warning #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
