@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Spam Blocker
 // @namespace    https://monatann.azurewebsites.net/
-// @version      1.6
+// @version      1.7
 // @description  Block spam (on VTuber chat)
 // @author       monatann
 // @match        https://www.youtube.com/*
@@ -57,7 +57,7 @@ var forceBanNameArray = [
     "pнoтo"
 ];
 //デバックする - デフォ: false
-var debug = false;
+var debug = true;
 
 /************************************
 * スクリプト用変数
@@ -79,6 +79,7 @@ let textArray = ["YouTube Spam Blocker"];
 let boolArray = [false];
 let warningArray = ["YouTube Spam Blocker"];
 let banArray = ["YouTube Spam Blocker"];
+let unBanTempArray = [];
 
 var a = function() {
     //HTML取得
@@ -97,12 +98,11 @@ var a = function() {
     for(var i2=1;i2<seeSize+1;i2++){
         checkComment = iframe.find("#item-offset > #items > .style-scope.yt-live-chat-item-list-renderer:nth-last-child(" + i2 + ")");
 
-
         var id = checkComment.attr("id");
         if(find(idArray, id) || id == null){
             return;
         }
-        if(idArray.length > 5){
+        if(idArray.length > 7){
             idArray.shift();
         }
         idArray.push(id);
@@ -122,13 +122,12 @@ function spamCheck(num, comment){
     commentTextNoEmoji = removeEmojis();
     commentTextIsEmoji = isEmoji();
 
-    if(find(forceUnBanNameArray, commentName)){
-        if(!find(textArray, commentTextNoEmoji)){
-            nameArray.push(commentName);
-            textArray.push(commentTextNoEmoji);
-            boolArray.push(commentTextIsEmoji);
-            return;
-        }else{
+    if(autoUnBan){
+        if(find(forceUnBanNameArray, commentName)){
+            addComment ();
+            if(debug){
+                console.log("UnBanUser #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
+            }
             return;
         }
     }
@@ -144,16 +143,24 @@ function spamCheck(num, comment){
                 if(debug){
                     console.log("#" + num + " Spam user: " + commentName + " :" + commentText);
                 }
+                addComment ();
                 return;
             }else{//ではない
                 //BAN解除
                 if(unBan){
-                    banArray.splice(index, 1);
-                    if(debug){
-                        console.log("UnBan #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
-                    }
-                    if(autoUnBan){
-                        forceUnBanNameArray.push(commentName);
+                    if(find(unBanTempArray, commentName)){
+                        banArray.splice(index, 1);
+                        if(debug){
+                            console.log("UnBan #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
+                        }
+                        if(autoUnBan){
+                            forceUnBanNameArray.push(commentName);
+                            if(debug){
+                                console.log("ForceUnBan #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
+                            }
+                        }
+                    }else{
+                        unBanTempArray.push(commentName);
                     }
                 }
             }
@@ -168,6 +175,7 @@ function spamCheck(num, comment){
             if(debug){
                 console.log("#" + num + " Force ban " + commentName + ": " + commentText);
             }
+            addComment ();
             return;
         }
     }
@@ -178,8 +186,8 @@ function spamCheck(num, comment){
     if(index != -1){
         //同じ人ではない
         if(nameArray[index] != commentName){
-            //絵文字がある - BAN行き
-            if(boolArray[index]){
+            //絵文字が2回ともある - BAN行き
+            if(boolArray[index] && commentTextIsEmoji){
                 if(commentName.length > nameLimit){
                     if(commentName.length > nameLimit){
                         if(debug){
@@ -221,13 +229,11 @@ function spamCheck(num, comment){
         }
 
         //履歴追加
-        nameArray.push(commentName);
-        textArray.push(commentTextNoEmoji);
-        boolArray.push(commentTextIsEmoji);
         if(debug){
             console.log("#" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
         }
     }
+    addComment ();
 }
 
 //絵文字か判断
@@ -278,6 +284,13 @@ function findIndex(array, str){
 function ban () {
     jQuery(checkComment).css("display", "none");
     banArray.push(commentName);
+}
+
+//BAN
+function addComment () {
+    nameArray.push(commentName);
+    textArray.push(commentTextNoEmoji);
+    boolArray.push(commentTextIsEmoji);
 }
 
 //フブキを推していけ~~!
