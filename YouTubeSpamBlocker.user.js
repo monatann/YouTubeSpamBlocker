@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Spam Blocker
 // @namespace    https://monatann.azurewebsites.net/
-// @version      1.7
+// @version      1.9
 // @description  Block spam (on VTuber chat)
 // @author       monatann
 // @match        https://www.youtube.com/*
@@ -13,7 +13,7 @@
 * 設定用変数
 *******************************/
 //BANする名前の長さ デフォ: 8文字以上
-var nameLimit = 8;
+var nameLimit = 6;
 //コメント履歴の数　デフォ: 300コメント
 var keepCommentLimit = 300;
 //コメントを同時にいくつ監視するか デフォ: 5コメント
@@ -57,7 +57,7 @@ var forceBanNameArray = [
     "pнoтo"
 ];
 //デバックする - デフォ: false
-var debug = true;
+var debug = false;
 
 /************************************
 * スクリプト用変数
@@ -80,6 +80,7 @@ let boolArray = [false];
 let warningArray = ["YouTube Spam Blocker"];
 let banArray = ["YouTube Spam Blocker"];
 let unBanTempArray = [];
+let tempArray = [];
 
 var a = function() {
     //HTML取得
@@ -100,10 +101,12 @@ var a = function() {
 
         var id = checkComment.attr("id");
         if(find(idArray, id) || id == null){
-            return;
+            continue;
         }
-        if(idArray.length > 7){
+
+        if(idArray.length > seeSize){
             idArray.shift();
+            tempArray.shift();
         }
         idArray.push(id);
 
@@ -115,7 +118,6 @@ setInterval(a, 100);
 function spamCheck(num, comment){
     //コメント情報
     rawCommentName = comment.find("#author-name").text();
-
     commentName = rawCommentName.toLowerCase();
     commentHTML = comment.find("#message");
     commentText = commentHTML.text().toLowerCase();
@@ -167,7 +169,6 @@ function spamCheck(num, comment){
         }
     }
 
-
     if(forceBan){
         //名前による強制BAN
         if(find(forceBanNameArray, commentName)){
@@ -179,6 +180,13 @@ function spamCheck(num, comment){
             return;
         }
     }
+
+    if(find(tempArray)){
+        ban(commentName);
+        addComment ();
+        return;
+    }
+    tempArray.push(commentName);
 
     index = findIndex(textArray, commentTextNoEmoji);
     var url;
