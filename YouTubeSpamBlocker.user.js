@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Spam Blocker
 // @namespace    https://monatann.azurewebsites.net/
-// @version      2.1
+// @version      2.2
 // @description  VTuberのコメント欄のスパムを自動ブロック
 // @author       monatann
 // @match        https://www.youtube.com/*
@@ -634,9 +634,7 @@ jQuery(document).ready(function(){
         //名前による強制BAN
         if(find(forceBanNameArray, commentName)){
             jQuery(checkComment).css("display", "none");
-
             log("BAN済ユーザー #" + num + " Force ban " + commentName + ": " + commentText);
-
             addComment ();
             return;
         }
@@ -656,7 +654,8 @@ jQuery(document).ready(function(){
                 //絵文字が2回ともある - BAN行き
                 if(commentTextIsEmoji){
                     if(commentName.length > nameLimit){
-                        log("絵文字有, 要BAN確認コメント #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
+                        jQuery(checkComment).css("display", "none");
+                        log("絵文字有, コメント非表示, 要BAN確認コメント #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
                         if(!find(banCheckDataArray, commentName)){
                             banCheckNameArray.push(commentName);
                         }
