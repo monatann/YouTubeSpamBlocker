@@ -5,12 +5,4 @@ VTuberのコメ欄に出てくる糞Bot自動検出&amp;コメント非表示を
 このファイルを使用して何かあったとしても製作者のmonatannは何も責任は負いません。自己責任でお願いします。
 
 <h1>導入方法</h1>
-<ul>
-<li>1. UserScriptを動かせる拡張機能を導入</li>
-Chromeの方: https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo?hl=ja<br>
-FireFoxの方: https://addons.mozilla.org/ja/firefox/addon/tampermonkey/
-<li>2. UserScriptを開く</li>
-GitHubのファイル、もしくは私のサイト　https://monatann.azurewebsites.net/files/YouTubeSpamBlocker.user.js
-<li>3. インストール</li>
-<li>4. 推し事をする</li>
-</ul>
+<a href="https://github.com/monatann/YouTubeSpamBlocker/wiki/%E5%B0%8E%E5%85%A5%E6%96%B9%E6%B3%95">Wiki参照</a>
