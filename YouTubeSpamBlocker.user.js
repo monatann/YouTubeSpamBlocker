@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Spam Blocker
 // @namespace    https://monatann.azurewebsites.net/
-// @version      2.0
+// @version      2.1
 // @description  VTuberのコメント欄のスパムを自動ブロック
 // @author       monatann
 // @match        https://www.youtube.com/*
@@ -415,6 +415,7 @@ let banArray = [];
 let unBanTempArray = [];
 let tempArray = [];
 //API関係
+let work = true;
 let apiKey;
 let idStop = "";
 let liveURL;
@@ -438,7 +439,7 @@ jQuery(document).ready(function(){
         checkLiveId();
 
         //コメント取得, 処理
-        if(liveChatId != ""){
+        if(liveChatId != "" && liveChatId != null){
             jQuery.ajax({
                 url:'https://www.googleapis.com/youtube/v3/liveChat/messages',
                 type:'GET',
@@ -523,7 +524,7 @@ jQuery(document).ready(function(){
         }
 
         //URL変化していたらLive ID入手
-        if(reId){
+        if(reId || liveChatId == null){
             jQuery.ajax({
                 url:'https://www.googleapis.com/youtube/v3/videos',
                 type:'GET',
@@ -537,6 +538,10 @@ jQuery(document).ready(function(){
                 .done( (data) => {
                 if(data.items[0].liveStreamingDetails.activeLiveChatId != "" || data.items[0].liveStreamingDetails.activeLiveChatId != null){
                     liveChatId = data.items[0].liveStreamingDetails.activeLiveChatId;
+                    if(liveChatId == null){
+                        reloadAPI(data);
+                        return;
+                    }
                     log(liveChatId);
                 }else{
                     return;}
@@ -552,52 +557,54 @@ jQuery(document).ready(function(){
     //メイン
     let time = 0;
     var mainFunc = function() {
-        //HTML取得
-        iframe = jQuery('#chatframe').contents();
+        if(work){
+            //HTML取得
+            iframe = jQuery('#chatframe').contents();
 
-        //各コメントごとに別関数呼び出し
-        let id;
-        jQuery(jQuery('#item-offset > #items > .style-scope.yt-live-chat-item-list-renderer').get().reverse()).each(function(index, element){
-            if(element.id != null){
-                if(id == null){
-                    id = element.id;
+            //各コメントごとに別関数呼び出し
+            let id;
+            jQuery(jQuery('#item-offset > #items > .style-scope.yt-live-chat-item-list-renderer').get().reverse()).each(function(index, element){
+                if(element.id != null){
+                    if(id == null){
+                        id = element.id;
+                    }
+                    if(idStop == element.id){
+                        idStop = id;
+                        return false;
+                    }
+                    checkComment = jQuery(element);
+                    spamCheck(index, checkComment);
                 }
-                if(idStop == element.id){
-                    idStop = id;
-                    return false;
-                }
-                checkComment = jQuery(element);
-                spamCheck(index, checkComment);
-            }
-        })
-        if(idStop == ""){
-            idStop = id;
-        }
-
-        if(banCheckNameArray.length != 0 && time > 100){
-            log(banCheckNameArray.length);
-            banCheck();
-
-            if(banCheckDataArray .length > 5){
-                banCheckDataArray.shift();
+            })
+            if(idStop == ""){
+                idStop = id;
             }
 
-            for(let num = 0; num < banCheckDataArray.length; num++){
-                let data = banCheckDataArray[num];
-                for (let i = 0; i < data.items.length; i++) {
-                    let item = data.items[i];
+            if(banCheckNameArray.length != 0 && time > 100){
+                log(banCheckNameArray.length);
+                banCheck();
 
-                    let temp = item.authorDetails.displayName;
-                    let index = findIndex(banCheckNameArray, temp);
-                    if(index != -1){
-                        channelCheck(item.authorDetails.channelId, item.authorDetails.displayName);
-                        banCheckNameArray.splice(index, 1);
+                if(banCheckDataArray .length > 5){
+                    banCheckDataArray.shift();
+                }
+
+                for(let num = 0; num < banCheckDataArray.length; num++){
+                    let data = banCheckDataArray[num];
+                    for (let i = 0; i < data.items.length; i++) {
+                        let item = data.items[i];
+
+                        let temp = item.authorDetails.displayName;
+                        let index = findIndex(banCheckNameArray, temp);
+                        if(index != -1){
+                            channelCheck(item.authorDetails.channelId, item.authorDetails.displayName);
+                            banCheckNameArray.splice(index, 1);
+                        }
                     }
                 }
+                time = 0;
             }
-            time = 0;
+            time++;
         }
-        time++;
     }
 
     setTimeout(function(){
@@ -672,13 +679,14 @@ jQuery(document).ready(function(){
     }
 
     function reloadAPI(errorLog){
-        if(errorLog.error.errors.reason == ""){//TODO
-            index = findIndex(apiKeyList, apiKey);
-            if(index + 1 < apiKeyList.length){
-                log("YouTubeAPI制限, APIキーを" + apiKey + " -> " + apiKeyList[index + 1] + " に変更");
-                apiKey = apiKeyList[index + 1];
-                banCheck();
-            }
+        index = findIndex(apiKeyList, apiKey);
+        if(index + 1 < apiKeyList.length){
+            log("YouTubeAPI制限 or 生放送ではない, APIキーを" + apiKey + " -> " + apiKeyList[index + 1] + " に変更");
+            apiKey = apiKeyList[index + 1];
+            banCheck();
+        }else{
+            log("YouTubeAPI制限 or 生放送ではない, 動作停止");
+            work = false;
         }
     }
 
