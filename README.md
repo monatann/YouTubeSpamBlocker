@@ -1,5 +1,5 @@
 # YouTubeSpamBlocker
-VTuberのコメ欄に出てくる糞Bot自動検出&コメント非表示をするUserScriptです。
+VTuberのコメ欄に出てくる糞Bot自動検出&コメント非表示をするUserScriptです。<br>
 使用する前にLICENSE(利用規約)ファイルを見てください。
 
 <h1>導入方法</h1>
