@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         YouTube Spam Blocker
 // @namespace    https://monatann.azurewebsites.net/
-// @version      2.2
+// @version      3.2
 // @description  VTuberのコメント欄のスパムを自動ブロック
 // @author       monatann
 // @match        https://www.youtube.com/*
+// @match        https://github.com/monatann/YouTubeSpamBlocker*
 // @require      https://monatann.azurewebsites.net/files/nicoaddon/script/jquery-3.2.1.js
 // @require      https://monatann.azurewebsites.net/files/nicoaddon/GM_config.js
 // @require      https://monatann.azurewebsites.net/files/nicoaddon/script/vegas.js
+// @require      https://apis.google.com/js/api.js
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
@@ -18,6 +20,7 @@
 https://gist.github.com/yuta0801/2e3cd3581f078d4a0f68ff3e3953c513
 https://developers.google.com/youtube/v3/docs?hl=ja
 https://developers.google.com/youtube/v3/live/docs
+https://developers.google.com/youtube/v3/guides/auth/client-side-web-apps?hl=ja
 ------------------------------------------------*/
 
 /* --------------- 開発環境 -------------------
@@ -28,17 +31,25 @@ Tampermonkey拡張機能
 ---------------------------------------------*/
 
 /* --------------------- GM Config設定 ---------------------*/
-let settingComment = `この拡張スクリプトの利用によっていかなる損失やトラブルが起こりましても私モナたんは一切の責任を負いません。
-各自の自己責任でお願いします。
-また、転載や自作発言などはやめてください。
-webサイトのHTMLに依存しているため、YouTubeのアップデートにより使えなくなることが予測されます。
-更新するかは気紛れですのでもし動かなかった場合諦めてください。
+let settingComment = `利用規約
+[共通規約]
+商用/非商用用途における規約を守ること。
+自作発言や転載に準ずる行為などをしないこと。
+利用規約を守らない場合、場合によっては利用する権利を失うことや、代金の請求などをする可能性があることに同意すること。
+このアプリを使ったことにより何かしらの損害が起きたとしても、原因にかかわらず作者は責任を負わないことに同意すること。
+これらの規約は場合によっては将来変更されることに同意すること。
 
-配信者の方へ
-認証が必要なAPI(BAN行為)は実装が面倒で、需要もあるのか全く分からないので作っていません。
-まずは連絡をください。
+[非商用用途]
+視聴者など、このツールを利用しても一切お金をもらわないような人は、[共通規約]さえ守ればいいです。
 
-隠しオプション: F12(ノートPCの場合多くはFn + F12)でconsoleを見ると・・・
+[商用用途]
+このアプリを利用して、他人への販売などをしたり、収益化済み配信者、企業が使う場合など、金銭が絡む場合は商用用途とします。
+このような場合で使いたい場合は、まず私に連絡をしてください。
+[共通規約]も守る必要があります。
+
+
+隠しオプション
+F12(ノートPCの場合多くはFn + F12)でconsoleを見ると・・・
 `
 let settingCSS = `
 #MyConfig_field_update3{ width:500px;border: none !important;background:none;border: none !important;  }
@@ -64,6 +75,7 @@ input
 :not(#MyConfig_field_menu1)
 :not(#MyConfig_field_menu2)
 :not(#MyConfig_field_menu3)
+:not(#MyConfig_field_menu4)
 :not(#MyConfig_field_live_forceUnBan)
 :not(#MyConfig_field_live_forceBanName)
 :not(#MyConfig_field_live_apiKeyList1)
@@ -77,7 +89,10 @@ input
 :not(#MyConfig_field_live_apiKeyList9)
 :not(#MyConfig_field_live_apiKeyList10)
 :not(#MyConfig_field_live_live_banWord)
+:not(#MyConfig_field_OAuthClientId)
+:not(#MyConfig_field_OAuthSecretId)
 :not(#MyConfig_field_live_live_settingBg)
+
 {
 width: 600px;background-color:#f0ffffa6;
 }
@@ -100,6 +115,7 @@ width: 600px;background-color:#f0ffffa6;
 #MyConfig_field_menu1 { width: 800px; border: none !important;background:none; border: none !important;  }
 #MyConfig_field_menu2 { width: 800px; border: none !important;background:none; border: none !important;  }
 #MyConfig_field_menu3 { width: 800px; border: none !important;background:none; border: none !important;  }
+#MyConfig_field_menu4 { width: 800px; border: none !important;background:none; border: none !important;  }
 
 #MyConfig_field_live_forceUnBan { width: 1000px; !important;  }
 #MyConfig_field_live_forceBanName { width: 1000px; !important;  }
@@ -114,6 +130,8 @@ width: 600px;background-color:#f0ffffa6;
 #MyConfig_field_live_apiKeyList9 { width: 1000px; !important;  }
 #MyConfig_field_live_apiKeyList10 { width: 1000px; !important;  }
 #MyConfig_field_live_banWord { width: 1000px; !important;  }
+#MyConfig_field_OAuthClientId { width: 1000px; !important;  }
+#MyConfig_field_OAuthSecretId { width: 1000px; !important;  }
 `
 GM_config.init(
     {
@@ -207,7 +225,7 @@ GM_config.init(
             },
             'live_apiKeyList10': // This is the id of the field
             {
-                'label': 'YouTube API Key 10', // Appears next to field
+                'label': 'YouTube API Key 10(OAuth適用API)', // Appears next to field
                 'type': 'text', // Makes this setting a text field
                 'default': '' // Default value if user doesn't change it
             },
@@ -217,11 +235,41 @@ GM_config.init(
                 'type': 'text', // Makes this setting a text field
                 'default': 'girl,chat,click,SUBID,key' // Default value if user doesn't change it
             },
-            'live_debug': // This is the id of the field
+            'useOAuth': // This is the id of the field
             {
-                'label': 'デバック true=有効', // Appears next to field
+                'label': '配信者向け自動BANシステムの許可 true=許可', // Appears next to field
                 'type': 'text', // Makes this setting a text field
                 'default': 'false' // Default value if user doesn't change it
+            },
+            'OAuthClientId': // This is the id of the field
+            {
+                'label': 'YouTube Data API OAuth2.0 Client Id', // Appears next to field
+                'type': 'text', // Makes this setting a text field
+                'default': '' // Default value if user doesn't change it
+            },
+            'OAuthSecretId': // This is the id of the field
+            {
+                'label': 'YouTube Data API OAuth2.0 Secret Id', // Appears next to field
+                'type': 'text', // Makes this setting a text field
+                'default': '' // Default value if user doesn't change it
+            },
+            'OAuthChannelId': // This is the id of the field
+            {
+                'label': '配信者チャンネルID(配信者モードのみ必須)', // Appears next to field
+                'type': 'text', // Makes this setting a text field
+                'default': '' // Default value if user doesn't change it
+            },
+            'useTempBan': // This is the id of the field
+            {
+                'label': '一時的BANの使用 true=一時的 false=永久', // Appears next to field
+                'type': 'text', // Makes this setting a text field
+                'default': 'true' // Default value if user doesn't change it
+            },
+            'tempBanTime': // This is the id of the field
+            {
+                'label': '一時的BANの時間 (秒)', // Appears next to field
+                'type': 'text', // Makes this setting a text field
+                'default': '86400' // Default value if user doesn't change it
             },
             'menu1': // This is the id of the field
             {
@@ -321,7 +369,25 @@ GM_config.init(
             },
             'menu3': // This is the id of the field
             {
-                'label': '------------------- 開発者 -------------------', // Appears next to field
+                'label': '------------------- 開発者向け設定 (制作者向け) -------------------', // Appears next to field
+                'type': 'text', // Makes this setting a text field
+                'default': '' // Default value if user doesn't change it
+            },
+            'OAuthAccessToken': // This is the id of the field
+            {
+                'label': 'アクセストークン(アプリ用, 変更しないこと)', // Appears next to field
+                'type': 'text', // Makes this setting a text field
+                'default': '' // Default value if user doesn't change it
+            },
+            'live_debug': // This is the id of the field
+            {
+                'label': 'アプリ開発者向けデバック機能 true=有効', // Appears next to field
+                'type': 'text', // Makes this setting a text field
+                'default': 'false' // Default value if user doesn't change it
+            },
+            'menu4': // This is the id of the field
+            {
+                'label': '------------------- 開発者情報 -------------------', // Appears next to field
                 'type': 'text', // Makes this setting a text field
                 'default': '' // Default value if user doesn't change it
             },
@@ -434,6 +500,77 @@ let regex = /(?:[\u2700-\u27bf]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\ud
 
 
 jQuery(document).ready(function(){
+
+    setTimeout(function(){
+        oauth();
+        firstSetting();
+        //YouTube拡張機能 読み込み
+        youtubeExtension();
+
+        if(apiKey == null){
+            if(apiKeyList.length > 0){
+                apiKey = apiKeyList[0];
+                setInterval(mainFunc, 100);
+            }
+        }
+    },2000);
+
+    function oauth(){
+        if(GM_config.get("useOAuth") == "false"){
+            return;
+        }
+        if(location.href.indexOf("https://github.com/monatann/YouTubeSpamBlocker#access_token=") != -1){//2. GitHUbのページに飛ばしトークン取得
+            let url = location.href.split("access_token=")[1];
+            let url2 = url.split("&token_type=")[0];
+
+            location.href = "https://www.youtube.com#access_token=" + url2;
+        }else if(jQuery("#guide").attr("class") == "style-scope ytd-app"){
+            if("/channel/" + GM_config.get("OAuthChannelId") != jQuery("#text > a").attr("href") && location.href.indexOf("https://www.youtube.com/#access_token=") == -1){
+                return;
+            }
+            if(location.href.indexOf("https://www.youtube.com/#access_token=") != -1){//3. YouTubeに戻してトークン取得
+                let url = location.href.split("access_token=")[1];
+                GM_config.set('OAuthAccessToken', url);
+                GM_config.save();
+            }else if(location.href.indexOf("https://www.youtube.com") != -1){//1. 認証画面表示
+                $.ajax({//4. 認証情報表示
+                    type: 'POST',
+                    url: 'https://www.googleapis.com/oauth2/v1/tokeninfo',
+                    data: {
+                        "access_token": GM_config.get('OAuthAccessToken'),
+                    },
+                }).done( (response) => {
+                    if(response.expires_in > 0){
+                        log("トークン有効確認, 残り " + response.expires_in + " 秒");
+                        return;
+                    }
+                })
+                    .fail( (data) => {
+                    window.open("https://accounts.google.com/o/oauth2/auth?client_id=" + GM_config.get('OAuthClientId') + "&redirect_uri=https://github.com/monatann/YouTubeSpamBlocker&scope=https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl&response_type=token");
+                    return;
+                })
+            }
+        }
+    }
+
+    function keepOAuthToken(){
+        $.ajax({//4. 認証情報更新
+            type: 'POST',
+            url: 'https://accounts.google.com/o/oauth2/token',
+            data: {
+                "client_id": GM_config.get('OAuthClientId'),
+                "client_secret": GM_config.get('OAuthSecretId'),
+                "refresh_token": GM_config.get('OAuthAccessToken'),
+                "grant_type": "refresh_token"
+            },
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+        }).then(function(response){
+            GM_config.set('OAuthAccessToken', response.access_token);
+        })
+    }
+
     function banCheck() {
         //Channel ID取得
         checkLiveId();
@@ -465,6 +602,8 @@ jQuery(document).ready(function(){
 
     //スパム疑いのチャンネル精査
     function channelCheck(channelId, banName){
+        keepOAuthToken();
+
         if(channelId != ""){
             jQuery.ajax({
                 url: 'https://www.youtube.com/channel/' + channelId + '/about',
@@ -494,6 +633,7 @@ jQuery(document).ready(function(){
                             if(findWord(banWord, html)){
                                 log("Spamサイト認定, BAN行き: " + banName);
                                 forceBanNameArray.push(banName);
+                                banSpamAction(channelId);
                             }else{
                                 forceUnBanNameArray.push(banName);
                                 log("Spamサイトではない, 確認済ユーザー行き: " + banName);
@@ -510,6 +650,57 @@ jQuery(document).ready(function(){
         }
     }
 
+    function banSpamAction(channelId){
+        let gettoken = GM_config.get('OAuthAccessToken');
+
+        let headers = {};
+        headers["Content-Type"] ="application/json ; charset=UTF-8";
+        let data;
+        let data1 = {
+            "snippet": {
+                "liveChatId": liveChatId,
+                "type": "temporary",
+                "banDurationSeconds": Number(GM_config.get('tempBanTime')),
+                "bannedUserDetails": {
+                    "channelId": channelId
+                }
+            }
+        };
+        let data2 = {
+            "snippet": {
+                "liveChatId": liveChatId,
+                "type": "permanent",
+                "bannedUserDetails": {
+                    "channelId": channelId
+                }
+            }
+        }
+        if(GM_config.get('useTempBan') == "true"){
+            data = data1
+        }else{
+            data = data2;
+        }
+
+        jQuery.ajax({
+            url:'https://www.googleapis.com/youtube/v3/liveChat/bans?key=' + GM_config.get('live_apiKeyList10') + '&part=snippet',
+            type:'POST',
+            contentType: 'application/json',
+            dataType: "json",
+            headers: headers,
+            'part': 'snippet',
+            data:JSON.stringify(data),
+            headers: {
+                'Authorization': 'Bearer ' + gettoken,
+            }
+        })
+            .done( (data) => {
+            log(data);
+        })
+            .fail( (data) => {
+            log(data);
+        });
+    }
+
     //Live IDチェック
     function checkLiveId() {
         //URLの変化を検知
@@ -517,11 +708,14 @@ jQuery(document).ready(function(){
         if(liveURL != parent.location.href.replace("https://www.youtube.com/watch?v=", "")){
             liveURL = parent.location.href.replace("https://www.youtube.com/watch?v=", "");
             reId = true;
-            log(liveURL);
         }
         if(liveURL.indexOf("?") != -1){
             liveURL = liveURL.split("?")[0];
         }
+        if(liveURL.indexOf("&") != -1){
+            liveURL = liveURL.split("&")[0];
+        }
+        log("LiveURL: " + liveURL);
 
         //URL変化していたらLive ID入手
         if(reId || liveChatId == null){
@@ -536,13 +730,14 @@ jQuery(document).ready(function(){
                 }
             })
                 .done( (data) => {
+                log(data);
                 if(data.items[0].liveStreamingDetails.activeLiveChatId != "" || data.items[0].liveStreamingDetails.activeLiveChatId != null){
                     liveChatId = data.items[0].liveStreamingDetails.activeLiveChatId;
                     if(liveChatId == null){
                         reloadAPI(data);
                         return;
                     }
-                    log(liveChatId);
+                    log("LiveID: " + liveChatId);
                 }else{
                     return;}
             })
@@ -556,6 +751,7 @@ jQuery(document).ready(function(){
 
     //メイン
     let time = 0;
+    let authTime = 0;
     var mainFunc = function() {
         if(work){
             //HTML取得
@@ -563,6 +759,8 @@ jQuery(document).ready(function(){
 
             //各コメントごとに別関数呼び出し
             let id;
+            let tempCheckCommentArray = [];
+
             jQuery(jQuery('#item-offset > #items > .style-scope.yt-live-chat-item-list-renderer').get().reverse()).each(function(index, element){
                 if(element.id != null){
                     if(id == null){
@@ -572,12 +770,20 @@ jQuery(document).ready(function(){
                         idStop = id;
                         return false;
                     }
-                    checkComment = jQuery(element);
-                    spamCheck(index, checkComment);
+                    tempCheckCommentArray.push(jQuery(element));
                 }
             })
+            for(let i=tempCheckCommentArray.length;i>-1;i--){
+                checkComment = tempCheckCommentArray[i];
+                spamCheck(i, checkComment);
+            }
             if(idStop == ""){
                 idStop = id;
+            }
+
+            if(authTime > 10000){//適当に17分程度ごとに更新
+                keepOAuthToken();
+                authTime = 0;
             }
 
             if(banCheckNameArray.length != 0 && time > 100){
@@ -604,21 +810,9 @@ jQuery(document).ready(function(){
                 time = 0;
             }
             time++;
+            authTime++;
         }
     }
-
-    setTimeout(function(){
-        firstSetting();
-        //YouTube拡張機能 読み込み
-        youtubeExtension();
-
-        if(apiKey == null){
-            if(apiKeyList.length > 0){
-                apiKey = apiKeyList[0];
-                setInterval(mainFunc, 100);
-            }
-        }
-    },2000);
 
     function spamCheck(num, comment){
         //コメント情報
@@ -653,7 +847,7 @@ jQuery(document).ready(function(){
             if(nameArray[index] != commentName){
                 //絵文字が2回ともある - BAN行き
                 if(commentTextIsEmoji){
-                    if(commentName.length > nameLimit){
+                    if(commentName.length >= nameLimit){
                         jQuery(checkComment).css("display", "none");
                         log("絵文字有, コメント非表示, 要BAN確認コメント #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
                         if(!find(banCheckDataArray, commentName)){
@@ -661,7 +855,7 @@ jQuery(document).ready(function(){
                         }
                     }
                 }else{//絵文字がない
-                    if(commentName.length > nameLimit){
+                    if(commentName.length >= nameLimit){
                         log("絵文字無, 要BAN確認コメント #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
                         if(!find(banCheckDataArray, commentName)){
                             banCheckNameArray.push(commentName);
