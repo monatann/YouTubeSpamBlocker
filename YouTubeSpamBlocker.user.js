@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Spam Blocker
 // @namespace    https://monatann.azurewebsites.net/
-// @version      3.2
+// @version      3.4
 // @description  VTuberのコメント欄のスパムを自動ブロック
 // @author       monatann
 // @match        https://www.youtube.com/*
@@ -76,6 +76,7 @@ input
 :not(#MyConfig_field_menu2)
 :not(#MyConfig_field_menu3)
 :not(#MyConfig_field_menu4)
+:not(#MyConfig_field_menu5)
 :not(#MyConfig_field_live_forceUnBan)
 :not(#MyConfig_field_live_forceBanName)
 :not(#MyConfig_field_live_apiKeyList1)
@@ -88,7 +89,6 @@ input
 :not(#MyConfig_field_live_apiKeyList8)
 :not(#MyConfig_field_live_apiKeyList9)
 :not(#MyConfig_field_live_apiKeyList10)
-:not(#MyConfig_field_live_live_banWord)
 :not(#MyConfig_field_OAuthClientId)
 :not(#MyConfig_field_OAuthSecretId)
 :not(#MyConfig_field_live_live_settingBg)
@@ -116,6 +116,7 @@ width: 600px;background-color:#f0ffffa6;
 #MyConfig_field_menu2 { width: 800px; border: none !important;background:none; border: none !important;  }
 #MyConfig_field_menu3 { width: 800px; border: none !important;background:none; border: none !important;  }
 #MyConfig_field_menu4 { width: 800px; border: none !important;background:none; border: none !important;  }
+#MyConfig_field_menu5 { width: 800px; border: none !important;background:none; border: none !important;  }
 
 #MyConfig_field_live_forceUnBan { width: 1000px; !important;  }
 #MyConfig_field_live_forceBanName { width: 1000px; !important;  }
@@ -129,7 +130,6 @@ width: 600px;background-color:#f0ffffa6;
 #MyConfig_field_live_apiKeyList8 { width: 1000px; !important;  }
 #MyConfig_field_live_apiKeyList9 { width: 1000px; !important;  }
 #MyConfig_field_live_apiKeyList10 { width: 1000px; !important;  }
-#MyConfig_field_live_banWord { width: 1000px; !important;  }
 #MyConfig_field_OAuthClientId { width: 1000px; !important;  }
 #MyConfig_field_OAuthSecretId { width: 1000px; !important;  }
 `
@@ -149,13 +149,19 @@ GM_config.init(
             {
                 'label': 'BANする名前の文字数(以上)', // Appears next to field
                 'type': 'text', // Makes this setting a text field
-                'default': '6' // Default value if user doesn't change it
+                'default': '0' // Default value if user doesn't change it
             },
             'live_keepComment': // This is the id of the field
             {
                 'label': 'コメント保持数', // Appears next to field
                 'type': 'text', // Makes this setting a text field
                 'default': '300' // Default value if user doesn't change it
+            },
+             'live_emoji': // This is the id of the field
+            {
+                'label': '非信頼ユーザーかつ一定文字以上の名前の人の絵文字コメ非表示', // Appears next to field
+                'type': 'text', // Makes this setting a text field
+                'default': 'false' // Default value if user doesn't change it
             },
             'live_forceUnBan': // This is the id of the field
             {
@@ -229,15 +235,15 @@ GM_config.init(
                 'type': 'text', // Makes this setting a text field
                 'default': '' // Default value if user doesn't change it
             },
-            'live_banWord': // This is the id of the field
+            'menu5': // This is the id of the field
             {
-                'label': 'bit.lyの宛先URL NGワード(複数可)', // Appears next to field
+                'label': '------------------- 配信者向け設定 -------------------', // Appears next to field
                 'type': 'text', // Makes this setting a text field
-                'default': 'girl,chat,click,SUBID,key' // Default value if user doesn't change it
+                'default': '' // Default value if user doesn't change it
             },
             'useOAuth': // This is the id of the field
             {
-                'label': '配信者向け自動BANシステムの許可 true=許可', // Appears next to field
+                'label': '自動BANシステムの許可 true=許可', // Appears next to field
                 'type': 'text', // Makes this setting a text field
                 'default': 'false' // Default value if user doesn't change it
             },
@@ -437,8 +443,6 @@ let forceBanNameArray = [];
 let debug = GM_config.get('live_debug');
 //YouTube APIキー　https://console.developers.google.com/apis/dashboard
 let apiKeyList = [];
-let getBanWord = GM_config.get('live_banWord');
-let banWord = [];
 
 /************************************
 * スクリプト用変数
@@ -592,7 +596,7 @@ jQuery(document).ready(function(){
                 banCheckDataArray.push(rawdata);
             })
                 .fail( (data) => {
-                log(data);
+                log("関数banCheckのエラー: " + data);
                 reloadAPI(data);
                 return;
             })
@@ -602,52 +606,75 @@ jQuery(document).ready(function(){
 
     //スパム疑いのチャンネル精査
     function channelCheck(channelId, banName){
-        keepOAuthToken();
-
         if(channelId != ""){
             jQuery.ajax({
-                url: 'https://www.youtube.com/channel/' + channelId + '/about',
+                url: 'https://www.youtube.com/channel/' + channelId,
                 timeout : 1000, // 1000 ms
                 cache: false, //キャッシュを保存するかの指定
                 success: function(html){
-
-                    if(jQuery(html).text().indexOf("bit.ly%2F") != -1){
-                        let link = jQuery(html).text().split("bit.ly%2F");
-                        link = link[1].split('"');
-                        jQuery.ajax({
-                            //https://monatann.azurewebsites.net/crossdomain.phpにリクエスト
-                            url: 'https://monatann.azurewebsites.net/crossdomain.php',
-                            data: {
-                                //送信するデータの設定(今回はtextが欲しいURL)
-                                "crossdomain_url": 'https://bit.ly/' + link[0] + '+'
-                            },
-                            //textで受け取る
-                            dataType: 'text',
-                            //クロスドメインを行う
-                            crossDomain: 'true',
-                            //POSTを行う
-                            type: 'POST'
-                            //成功したら
-                        }).done(function (html) {
-                            //NGワードがあるか
-                            if(findWord(banWord, html)){
-                                log("Spamサイト認定, BAN行き: " + banName);
-                                forceBanNameArray.push(banName);
-                                banSpamAction(channelId);
-                            }else{
-                                forceUnBanNameArray.push(banName);
-                                log("Spamサイトではない, 確認済ユーザー行き: " + banName);
-                            }
-                        }).fail(function (jqXHR, textStatus) {
-                            log('失敗', jqXHR, textStatus);
-                        });
+                    //console.log(jQuery(html).text());
+                    let htmlText = jQuery(html).text();
+                    let findIndex = htmlText.indexOf("bit.ly");
+                    if(findIndex != -1){
+                        let link = htmlText.substr(findIndex, 20);
+                        link = link.replace("bit.ly/", "");
+                        link = link.split("\\n")[0];
+                        link = link.split("\\")[0];
+                        channelCheckPost(channelId, banName, link);
                     }else{
                         forceUnBanNameArray.push(banName);
                         log("bit.lyではない, 確認済ユーザー行き: " + banName);
                     }
+                    /*
+                    if(htmlText.indexOf("bit.ly%2F") != -1){
+                        let link = jQuery(html).text().split("bit.ly%2F");
+                        link = link[1].split('\\');
+                        log("ケース1: " + link[0]);
+                        channelCheckPost(channelId, banName, link[0])
+                    }else if(htmlText.indexOf("bit.ly/") != -1){
+                        let link = jQuery(html).text().split("bit.ly/");
+                        link = link[1].split('\\n');
+                        log("ケース2: " + link[0]);
+                        channelCheckPost(channelId, banName, link[0])
+                    }else{
+                        forceUnBanNameArray.push(banName);
+                        log("bit.lyではない, 確認済ユーザー行き: " + banName);
+                    }
+                    */
                 }
             });
         }
+    }
+
+    function channelCheckPost(channelId, banName, link){
+        log("bitlyリンク先: " + link);
+        jQuery.ajax({
+            //https://monatann.azurewebsites.net/crossdomain_youtube.phpにリクエスト
+            url: 'https://monatann.azurewebsites.net/crossdomain_youtube.php',
+            data: {
+                //送信するデータの設定(今回はtextが欲しいURL)
+                "crossdomain_url": 'https://bit.ly/' + link + '+'
+            },
+            //textで受け取る
+            dataType: 'text',
+            //クロスドメインを行う
+            crossDomain: 'true',
+            //POSTを行う
+            type: 'POST'
+            //成功したら
+        }).done(function (html) {
+            //NGワードがあるか
+            if(html == "true"){
+                log("Spamサイト認定, BAN行き: " + banName);
+                forceBanNameArray.push(banName);
+                banSpamAction(channelId);
+            }else{
+                forceUnBanNameArray.push(banName);
+                log("Spamサイトではない, 確認済ユーザー行き: " + banName);
+            }
+        }).fail(function (jqXHR, textStatus) {
+            log('関数channelCheckPost 失敗: ', jqXHR, textStatus);
+        });
     }
 
     function banSpamAction(channelId){
@@ -694,10 +721,10 @@ jQuery(document).ready(function(){
             }
         })
             .done( (data) => {
-            log(data);
+            log("BANしました: " + channelId);
         })
             .fail( (data) => {
-            log(data);
+             log("BAN失敗しました: " + channelId);
         });
     }
 
@@ -715,8 +742,6 @@ jQuery(document).ready(function(){
         if(liveURL.indexOf("&") != -1){
             liveURL = liveURL.split("&")[0];
         }
-        log("LiveURL: " + liveURL);
-
         //URL変化していたらLive ID入手
         if(reId || liveChatId == null){
             jQuery.ajax({
@@ -737,12 +762,12 @@ jQuery(document).ready(function(){
                         reloadAPI(data);
                         return;
                     }
-                    log("LiveID: " + liveChatId);
+                    log("LiveURL: " + liveURL + " LiveID: " + liveChatId);
                 }else{
                     return;}
             })
                 .fail( (data) => {
-                log(data);
+                log("関数checkLiveId　失敗: " + data);
                 reloadAPI(data);
                 return;
             })
@@ -787,7 +812,7 @@ jQuery(document).ready(function(){
             }
 
             if(banCheckNameArray.length != 0 && time > 100){
-                log(banCheckNameArray.length);
+                log("現在のBAN判断待機数: " + banCheckNameArray.length);
                 banCheck();
 
                 if(banCheckDataArray .length > 5){
@@ -955,7 +980,6 @@ jQuery(document).ready(function(){
     function firstSetting(){
         forceUnBanNameArray = makeArray(getForceUnBanName);
         forceBanNameArray = makeArray(getForceBanName);
-        banWord = makeArray(getBanWord);
 
         if(GM_config.get('live_apiKeyList1') != ""){
             apiKeyList.push(GM_config.get('live_apiKeyList1'));
