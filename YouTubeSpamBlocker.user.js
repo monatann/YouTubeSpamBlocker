@@ -157,7 +157,7 @@ GM_config.init(
                 'type': 'text', // Makes this setting a text field
                 'default': '300' // Default value if user doesn't change it
             },
-             'live_emoji': // This is the id of the field
+            'live_emoji': // This is the id of the field
             {
                 'label': '非信頼ユーザーかつ一定文字以上の名前の人の絵文字コメ非表示', // Appears next to field
                 'type': 'text', // Makes this setting a text field
@@ -724,7 +724,7 @@ jQuery(document).ready(function(){
             log("BANしました: " + channelId);
         })
             .fail( (data) => {
-             log("BAN失敗しました: " + channelId);
+            log("BAN失敗しました: " + channelId);
         });
     }
 
@@ -873,7 +873,9 @@ jQuery(document).ready(function(){
                 //絵文字が2回ともある - BAN行き
                 if(commentTextIsEmoji){
                     if(commentName.length >= nameLimit){
-                        jQuery(checkComment).css("display", "none");
+                        if(GM_config.get('live_emoji') == "true"){
+                            jQuery(checkComment).css("display", "none");
+                        }
                         log("絵文字有, コメント非表示, 要BAN確認コメント #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
                         if(!find(banCheckDataArray, commentName)){
                             banCheckNameArray.push(commentName);
