@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Spam Blocker
 // @namespace    https://monatann.azurewebsites.net/
-// @version      3.4
+// @version      3.6
 // @description  VTuberのコメント欄のスパムを自動ブロック
 // @author       monatann
 // @match        https://www.youtube.com/*
@@ -18,6 +18,7 @@
 
 /* --------------- 参考サイト -------------------
 https://gist.github.com/yuta0801/2e3cd3581f078d4a0f68ff3e3953c513
+https://qiita.com/asa-taka/items/888bc5a1d7f30ee7eda2
 https://developers.google.com/youtube/v3/docs?hl=ja
 https://developers.google.com/youtube/v3/live/docs
 https://developers.google.com/youtube/v3/guides/auth/client-side-web-apps?hl=ja
@@ -149,7 +150,7 @@ GM_config.init(
             {
                 'label': 'BANする名前の文字数(以上)', // Appears next to field
                 'type': 'text', // Makes this setting a text field
-                'default': '0' // Default value if user doesn't change it
+                'default': '4' // Default value if user doesn't change it
             },
             'live_keepComment': // This is the id of the field
             {
@@ -504,24 +505,126 @@ let regex = /(?:[\u2700-\u27bf]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\ud
 
 
 jQuery(document).ready(function(){
-
     setTimeout(function(){
-        oauth();
-        firstSetting();
         //YouTube拡張機能 読み込み
         youtubeExtension();
 
         if(apiKey == null){
+            let tempApi = GM_config.get('live_apiKeyList1');
+            if(tempApi != ""){
+                apiKeyList.push(tempApi);
+            }
+            tempApi = GM_config.get('live_apiKeyList2');
+            if(tempApi != ""){
+                apiKeyList.push(tempApi);
+            }
+            tempApi = GM_config.get('live_apiKeyList3');
+            if(tempApi != ""){
+                apiKeyList.push(tempApi);
+            }
+            tempApi = GM_config.get('live_apiKeyList4');
+            if(tempApi != ""){
+                apiKeyList.push(tempApi);
+            }
+            tempApi = GM_config.get('live_apiKeyList5');
+            if(tempApi != ""){
+                apiKeyList.push(tempApi);
+            }
+            tempApi = GM_config.get('live_apiKeyList6');
+            if(tempApi != ""){
+                apiKeyList.push(tempApi);
+            }
+            tempApi = GM_config.get('live_apiKeyList7');
+            if(tempApi != ""){
+                apiKeyList.push(tempApi);
+            }
+            tempApi = GM_config.get('live_apiKeyList8');
+            if(tempApi != ""){
+                apiKeyList.push(tempApi);
+            }
+            tempApi = GM_config.get('live_apiKeyList9');
+            if(tempApi != ""){
+                apiKeyList.push(tempApi);
+            }
+            tempApi = GM_config.get('live_apiKeyList10');
+            if(tempApi != ""){
+                apiKeyList.push(tempApi);
+            }
+
             if(apiKeyList.length > 0){
                 apiKey = apiKeyList[0];
-                setInterval(mainFunc, 100);
             }
+        }
+
+        if(location.href.indexOf("live_chat") != -1){
+            commentInterval(1000);
+            apiInterval(20000);
+            oauthKeepInterval(1200000);
         }
     },2000);
 
+    const sleep = msec => new Promise(resolve => setTimeout(resolve, msec));
+    const apiInterval = async (interval) => {
+        while (true) {
+            log("apiInterval　処理開始");
+            await Promise.all([
+                Promise.resolve("ok")
+                .then(checkLiveId())//Live IDの入手
+                .then(oauth())//OAuth新規認証処理
+                .then(getCommentByAPI())//コメント取得&BAN処理
+                .catch((e) => log(e)),//エラーキャッチ
+                sleep(interval)//タイマー用
+            ])
+        }
+    }
+
+    //Live IDチェック
+    function checkLiveId() {
+        //URLの変化を検知
+        let reId = false;
+        if(liveURL != parent.location.href.replace("https://www.youtube.com/watch?v=", "")){
+            liveURL = parent.location.href.replace("https://www.youtube.com/watch?v=", "");
+            reId = true;
+        }
+        if(liveURL.indexOf("?") != -1){
+            liveURL = liveURL.split("?")[0];
+        }
+        if(liveURL.indexOf("&") != -1){
+            liveURL = liveURL.split("&")[0];
+        }
+        //URL変化していたらLive ID入手
+        if(reId || liveChatId == null){
+            jQuery.ajax({
+                url:'https://www.googleapis.com/youtube/v3/videos',
+                type:'GET',
+                data:{
+                    'part':'liveStreamingDetails',
+                    'id':liveURL,
+                    'key':apiKey,
+                    'Access-Control-Allow-Credentials': true
+                }
+            })
+                .done( (data) => {
+                if(data.items[0].liveStreamingDetails.activeLiveChatId != "" || data.items[0].liveStreamingDetails.activeLiveChatId != null){
+                    liveChatId = data.items[0].liveStreamingDetails.activeLiveChatId;
+                    if(liveChatId == null){
+                        reloadAPI(data);
+                    }
+                    log("LiveURL: " + liveURL + " LiveID: " + liveChatId);
+                }
+            })
+                .fail( (data) => {
+                log("関数checkLiveId　失敗 api key: " + apiKey);
+                log(data);
+                reloadAPI(data);
+            })
+        }
+        return Promise.resolve("ok");
+    }
+
     function oauth(){
         if(GM_config.get("useOAuth") == "false"){
-            return;
+            return Promise.resolve("ok");
         }
         if(location.href.indexOf("https://github.com/monatann/YouTubeSpamBlocker#access_token=") != -1){//2. GitHUbのページに飛ばしトークン取得
             let url = location.href.split("access_token=")[1];
@@ -530,7 +633,7 @@ jQuery(document).ready(function(){
             location.href = "https://www.youtube.com#access_token=" + url2;
         }else if(jQuery("#guide").attr("class") == "style-scope ytd-app"){
             if("/channel/" + GM_config.get("OAuthChannelId") != jQuery("#text > a").attr("href") && location.href.indexOf("https://www.youtube.com/#access_token=") == -1){
-                return;
+                return Promise.resolve("ok");
             }
             if(location.href.indexOf("https://www.youtube.com/#access_token=") != -1){//3. YouTubeに戻してトークン取得
                 let url = location.href.split("access_token=")[1];
@@ -546,39 +649,18 @@ jQuery(document).ready(function(){
                 }).done( (response) => {
                     if(response.expires_in > 0){
                         log("トークン有効確認, 残り " + response.expires_in + " 秒");
-                        return;
                     }
                 })
                     .fail( (data) => {
                     window.open("https://accounts.google.com/o/oauth2/auth?client_id=" + GM_config.get('OAuthClientId') + "&redirect_uri=https://github.com/monatann/YouTubeSpamBlocker&scope=https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl&response_type=token");
-                    return;
                 })
             }
         }
+        return Promise.resolve("ok");
     }
 
-    function keepOAuthToken(){
-        $.ajax({//4. 認証情報更新
-            type: 'POST',
-            url: 'https://accounts.google.com/o/oauth2/token',
-            data: {
-                "client_id": GM_config.get('OAuthClientId'),
-                "client_secret": GM_config.get('OAuthSecretId'),
-                "refresh_token": GM_config.get('OAuthAccessToken'),
-                "grant_type": "refresh_token"
-            },
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-        }).then(function(response){
-            GM_config.set('OAuthAccessToken', response.access_token);
-        })
-    }
-
-    function banCheck() {
-        //Channel ID取得
-        checkLiveId();
-
+    let apiLastCommentId = "";
+    async function getCommentByAPI(){
         //コメント取得, 処理
         if(liveChatId != "" && liveChatId != null){
             jQuery.ajax({
@@ -586,22 +668,58 @@ jQuery(document).ready(function(){
                 type:'GET',
                 data:{
                     'liveChatId':liveChatId,
-                    'part':"authorDetails,snippet",
+                    'part':"authorDetails",
                     'hl':"ja",
                     'maxResults':2000,
                     'key':apiKey
                 }
             })
                 .done( (rawdata) => {
-                banCheckDataArray.push(rawdata);
+                let promiseCalls = []
+                let items = rawdata.items;
+                let item;
+                let detail;
+
+                log("BAN確認, 残り " + banCheckNameArray.length);
+
+                for (let i = items.length; i >= 1; i--) {
+                    try{
+                        item = items[i-1];
+                        detail = item.authorDetails;
+                        if(item.id != apiLastCommentId){
+                            let index = findIndex(banCheckNameArray, detail.displayName);
+                            if(index != -1){
+                                index++;
+                                promiseCalls.push(channelCheck(detail.channelId, detail.displayName));
+                                banCheckNameArray = removeStringInArray(banCheckNameArray, detail.displayName);
+                            }
+                        }else{
+                            break;
+                        }
+                    }catch(e){continue;}
+                }
+
+                removeTaskInArray();
+                log("BAN確認終了, 残り " + banCheckNameArray.length);
+
+                for(let i=0;i<banCheckNameArray.length;i++){
+                    log("#" + i + " " + banCheckNameArray[i]);
+                }
+
+                try{
+                    apiLastCommentId = items[items.length-1].id;
+                }catch(e){}
+
+                if(promiseCalls.length > 0){
+                    Promise.all(promiseCalls);
+                }
             })
                 .fail( (data) => {
                 log("関数banCheckのエラー: " + data);
                 reloadAPI(data);
-                return;
             })
         }
-
+        return Promise.resolve("ok");
     }
 
     //スパム疑いのチャンネル精査
@@ -620,27 +738,12 @@ jQuery(document).ready(function(){
                         link = link.replace("bit.ly/", "");
                         link = link.split("\\n")[0];
                         link = link.split("\\")[0];
+                        link = link.split(" ")[0];
                         channelCheckPost(channelId, banName, link);
                     }else{
                         forceUnBanNameArray.push(banName);
                         log("bit.lyではない, 確認済ユーザー行き: " + banName);
                     }
-                    /*
-                    if(htmlText.indexOf("bit.ly%2F") != -1){
-                        let link = jQuery(html).text().split("bit.ly%2F");
-                        link = link[1].split('\\');
-                        log("ケース1: " + link[0]);
-                        channelCheckPost(channelId, banName, link[0])
-                    }else if(htmlText.indexOf("bit.ly/") != -1){
-                        let link = jQuery(html).text().split("bit.ly/");
-                        link = link[1].split('\\n');
-                        log("ケース2: " + link[0]);
-                        channelCheckPost(channelId, banName, link[0])
-                    }else{
-                        forceUnBanNameArray.push(banName);
-                        log("bit.lyではない, 確認済ユーザー行き: " + banName);
-                    }
-                    */
                 }
             });
         }
@@ -667,7 +770,11 @@ jQuery(document).ready(function(){
             if(html == "true"){
                 log("Spamサイト認定, BAN行き: " + banName);
                 forceBanNameArray.push(banName);
-                banSpamAction(channelId);
+                if(GM_config.get("OAuthChannelId") == jQuery("#text > a").attr("href")){
+                    banSpamAction(channelId);
+                }else{
+                    log("BAN処理権限無し");
+                }
             }else{
                 forceUnBanNameArray.push(banName);
                 log("Spamサイトではない, 確認済ユーザー行き: " + banName);
@@ -728,64 +835,45 @@ jQuery(document).ready(function(){
         });
     }
 
-    //Live IDチェック
-    function checkLiveId() {
-        //URLの変化を検知
-        let reId = false;
-        if(liveURL != parent.location.href.replace("https://www.youtube.com/watch?v=", "")){
-            liveURL = parent.location.href.replace("https://www.youtube.com/watch?v=", "");
-            reId = true;
-        }
-        if(liveURL.indexOf("?") != -1){
-            liveURL = liveURL.split("?")[0];
-        }
-        if(liveURL.indexOf("&") != -1){
-            liveURL = liveURL.split("&")[0];
-        }
-        //URL変化していたらLive ID入手
-        if(reId || liveChatId == null){
-            jQuery.ajax({
-                url:'https://www.googleapis.com/youtube/v3/videos',
-                type:'GET',
-                data:{
-                    'part':'liveStreamingDetails',
-                    'id':liveURL,
-                    'key':apiKey,
-                    'Access-Control-Allow-Credentials': true
-                }
-            })
-                .done( (data) => {
-                log(data);
-                if(data.items[0].liveStreamingDetails.activeLiveChatId != "" || data.items[0].liveStreamingDetails.activeLiveChatId != null){
-                    liveChatId = data.items[0].liveStreamingDetails.activeLiveChatId;
-                    if(liveChatId == null){
-                        reloadAPI(data);
-                        return;
-                    }
-                    log("LiveURL: " + liveURL + " LiveID: " + liveChatId);
-                }else{
-                    return;}
-            })
-                .fail( (data) => {
-                log("関数checkLiveId　失敗: " + data);
-                reloadAPI(data);
-                return;
-            })
+    const oauthKeepInterval = async (interval) => {
+        while (true) {
+            log("oauthKeepInterval 処理開始");
+            await Promise.all([
+                keepOAuthToken(),//OAuthトークン更新
+                sleep(interval)//タイマー用
+            ])
         }
     }
 
-    //メイン
-    let time = 0;
-    let authTime = 0;
-    var mainFunc = function() {
-        if(work){
+    function keepOAuthToken(){
+        $.ajax({//4. 認証情報更新
+            type: 'POST',
+            url: 'https://accounts.google.com/o/oauth2/token',
+            data: {
+                "client_id": GM_config.get('OAuthClientId'),
+                "client_secret": GM_config.get('OAuthSecretId'),
+                "refresh_token": GM_config.get('OAuthAccessToken'),
+                "grant_type": "refresh_token"
+            },
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+        }).then(function(response){
+            GM_config.set('OAuthAccessToken', response.access_token);
+        })
+    }
+
+    const commentInterval = async (interval) => {
+        log("commentInterval 処理開始");
+
+        while (work) {
             //HTML取得
             iframe = jQuery('#chatframe').contents();
 
             //各コメントごとに別関数呼び出し
             let id;
-            let tempCheckCommentArray = [];
 
+            let promiseCalls = []
             jQuery(jQuery('#item-offset > #items > .style-scope.yt-live-chat-item-list-renderer').get().reverse()).each(function(index, element){
                 if(element.id != null){
                     if(id == null){
@@ -795,107 +883,84 @@ jQuery(document).ready(function(){
                         idStop = id;
                         return false;
                     }
-                    tempCheckCommentArray.push(jQuery(element));
+                    checkComment = jQuery(element);
+                    promiseCalls.push(spamCheck(0, checkComment));
                 }
             })
-            for(let i=tempCheckCommentArray.length;i>-1;i--){
-                checkComment = tempCheckCommentArray[i];
-                spamCheck(i, checkComment);
-            }
+
             if(idStop == ""){
                 idStop = id;
             }
 
-            if(authTime > 10000){//適当に17分程度ごとに更新
-                keepOAuthToken();
-                authTime = 0;
-            }
-
-            if(banCheckNameArray.length != 0 && time > 100){
-                log("現在のBAN判断待機数: " + banCheckNameArray.length);
-                banCheck();
-
-                if(banCheckDataArray .length > 5){
-                    banCheckDataArray.shift();
-                }
-
-                for(let num = 0; num < banCheckDataArray.length; num++){
-                    let data = banCheckDataArray[num];
-                    for (let i = 0; i < data.items.length; i++) {
-                        let item = data.items[i];
-
-                        let temp = item.authorDetails.displayName;
-                        let index = findIndex(banCheckNameArray, temp);
-                        if(index != -1){
-                            channelCheck(item.authorDetails.channelId, item.authorDetails.displayName);
-                            banCheckNameArray.splice(index, 1);
-                        }
-                    }
-                }
-                time = 0;
-            }
-            time++;
-            authTime++;
+            await Promise.all([
+                promiseCalls,//コメント処理
+                sleep(interval)//タイマー用
+            ])
+            firstSpamCheck = true;
         }
     }
 
+    let firstSpamCheck = false;
     function spamCheck(num, comment){
-        //コメント情報
-        if(comment == null){
-            return;
-        }
-        commentName = comment.find("#author-name").text();
-        commentHTML = comment.find("#message");
-        commentText = commentHTML.text().toLowerCase();
-        commentTextNoEmoji = removeEmojis();
-        commentTextIsEmoji = isEmoji();
-
-        //名前による強制BAN
-        if(find(forceBanNameArray, commentName)){
-            jQuery(checkComment).css("display", "none");
-            log("BAN済ユーザー #" + num + " Force ban " + commentName + ": " + commentText);
-            addComment ();
-            return;
-        }
-
-        if(find(forceUnBanNameArray, commentName)){
-            addComment ();
-            log("確認済みユーザー #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
-            return;
-        }
-
-        index = findIndex(textArray, commentTextNoEmoji);
-        let url;
-        //コメントが同じ
-        if(index != -1){
-            //同じ人ではない
-            if(nameArray[index] != commentName){
-                //絵文字が2回ともある - BAN行き
-                if(commentTextIsEmoji){
-                    if(commentName.length >= nameLimit){
-                        if(GM_config.get('live_emoji') == "true"){
-                            jQuery(checkComment).css("display", "none");
-                        }
-                        log("絵文字有, コメント非表示, 要BAN確認コメント #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
-                        if(!find(banCheckDataArray, commentName)){
-                            banCheckNameArray.push(commentName);
-                        }
-                    }
-                }else{//絵文字がない
-                    if(commentName.length >= nameLimit){
-                        log("絵文字無, 要BAN確認コメント #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
-                        if(!find(banCheckDataArray, commentName)){
-                            banCheckNameArray.push(commentName);
-                        }
-                    }
-                }
-            }else{//同じ人
+        new Promise(function () {
+            //コメント情報
+            if(comment == null){
+                return Promise.resolve("ok");
             }
-        }else{//コメントが違う
-            //履歴追加
-            log("通常コメント #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
-        }
-        addComment ();
+            commentName = comment.find("#author-name").text();
+            commentHTML = comment.find("#message");
+            commentText = commentHTML.text().toLowerCase();
+            commentTextNoEmoji = removeEmojis();
+            commentTextIsEmoji = isEmoji();
+
+            //名前による強制BAN
+            if(find(forceBanNameArray, commentName)){
+                jQuery(checkComment).css("display", "none");
+                log("BAN済ユーザー #" + num + " Force ban " + commentName + ": " + commentText);
+                addComment ();
+                return Promise.resolve("ok");
+            }
+
+            if(find(forceUnBanNameArray, commentName)){
+                addComment ();
+                log("確認済みユーザー #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
+                return Promise.resolve("ok");
+            }
+
+            index = findIndex(textArray, commentTextNoEmoji);
+            let url;
+            //コメントが同じ
+            if(index != -1){
+                //同じ人ではない
+                if(nameArray[index] != commentName){
+                    //絵文字が2回ともある - BAN行き
+                    if(commentTextIsEmoji){
+                        if(commentName.length >= nameLimit){
+                            if(GM_config.get('live_emoji') == "true"){
+                                jQuery(checkComment).css("display", "none");
+                            }
+                            log("絵文字有, コメント非表示, 要BAN確認コメント #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
+                            if(!find(banCheckDataArray, commentName) && firstSpamCheck){
+                                banCheckNameArray.push(commentName);
+                            }
+                        }
+                    }else{//絵文字がない
+                        if(commentName.length >= nameLimit){
+                            log("絵文字無, 要BAN確認コメント #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
+                            if(!find(banCheckDataArray, commentName) && firstSpamCheck){
+                                banCheckNameArray.push(commentName);
+                            }
+                        }
+                    }
+                }else{//同じ人
+                }
+            }else{//コメントが違う
+                //履歴追加
+                log("通常コメント #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
+            }
+            addComment ();
+        })
+        return Promise.resolve("ok");
     }
 
     function reloadAPI(errorLog){
@@ -948,6 +1013,43 @@ jQuery(document).ready(function(){
             }
         }
         return -1;
+    }
+
+    //配列内全削除
+    function removeStringInArray(array, str){
+        let tempArray = [];
+        for(let i = 0; i < array.length; i++){
+            if(array[i] != str){
+                tempArray.push(array[i]);
+            }
+        }
+        return tempArray;
+    }
+
+    //取得不能なBAN検索待機を削除
+    let tempTaskArray = [];
+    let tempTaskAgainArray = [];
+    let taskName;
+    function removeTaskInArray(){
+        for(let i = 0; i < tempTaskAgainArray.length; i++){
+            taskName = tempTaskAgainArray[i];
+            log("TaskName: " + taskName);
+            if(find(banCheckNameArray, taskName)){
+                tempTaskAgainArray = removeStringInArray(tempTaskAgainArray, taskName);
+                banCheckNameArray = removeStringInArray(banCheckNameArray, taskName);
+                log("banCheckNameArrayに残ったままの " + taskName + " を除外");
+            }else{
+                tempTaskAgainArray = removeStringInArray(tempTaskAgainArray, taskName);
+            }
+        }
+
+        for(let i = 0; i < tempTaskArray.length; i++){
+            if(find(banCheckNameArray, tempTaskArray[i])){
+                log("同じ値: " + tempTaskArray[i]);
+                tempTaskAgainArray.push(tempTaskArray[i]);
+            }
+        }
+        tempTaskArray = banCheckNameArray;
     }
 
     //文字に配列内の文字を含む
