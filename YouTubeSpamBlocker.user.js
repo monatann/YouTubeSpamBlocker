@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Spam Blocker
 // @namespace    https://monatann.azurewebsites.net/
-// @version      3.6
+// @version      3.7
 // @description  VTuberのコメント欄のスパムを自動ブロック
 // @author       monatann
 // @match        https://www.youtube.com/*
@@ -690,7 +690,8 @@ jQuery(document).ready(function(){
                             let index = findIndex(banCheckNameArray, detail.displayName);
                             if(index != -1){
                                 index++;
-                                promiseCalls.push(channelCheck(detail.channelId, detail.displayName));
+                                channelCheck(detail.channelId, detail.displayName);
+                                //promiseCalls.push(channelCheck(detail.channelId, detail.displayName));
                                 banCheckNameArray = removeStringInArray(banCheckNameArray, detail.displayName);
                             }
                         }else{
@@ -709,10 +710,11 @@ jQuery(document).ready(function(){
                 try{
                     apiLastCommentId = items[items.length-1].id;
                 }catch(e){}
-
+                /*
                 if(promiseCalls.length > 0){
                     Promise.all(promiseCalls);
                 }
+                */
             })
                 .fail( (data) => {
                 log("関数banCheckのエラー: " + data);
@@ -929,6 +931,7 @@ jQuery(document).ready(function(){
 
             index = findIndex(textArray, commentTextNoEmoji);
             let url;
+            /*
             //コメントが同じ
             if(index != -1){
                 //同じ人ではない
@@ -947,8 +950,44 @@ jQuery(document).ready(function(){
                     }else{//絵文字がない
                         if(commentName.length >= nameLimit){
                             log("絵文字無, 要BAN確認コメント #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
+                            if(!find(warningArray, commentName) && firstSpamCheck){
+                                warningArray.push(commentName);
+                            }
+                        }
+                    }
+                }else{//同じ人
+                }
+                */
+            if(index != -1){
+                //同じ人ではない
+                if(nameArray[index] != commentName){
+                    //絵文字がある - BAN確認行き
+                    if(commentTextIsEmoji){
+                        if(commentName.length > nameLimit){
+                            if(GM_config.get('live_emoji') == "true"){
+                                jQuery(checkComment).css("display", "none");
+                            }
+                            log("絵文字有, コメント非表示, 要BAN確認コメント #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
                             if(!find(banCheckDataArray, commentName) && firstSpamCheck){
                                 banCheckNameArray.push(commentName);
+                            }
+                        }
+                    }else{//絵文字がない
+                        //既に警告されていない - 警告
+                        if(!find(warningArray, commentName)){
+                            if(commentName.length > nameLimit){
+                                if(debug){
+                                    console.log("絵文字無, 警告行き #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
+                                }
+                                warningArray.push(commentName);
+                            }
+                        }else{//既に警告されている名前ならBAN確認行き
+                            if(commentName.length > nameLimit){
+                                log("絵文字無, 警告済, 要BAN確認コメント #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
+                                if(!find(banCheckDataArray, commentName) && firstSpamCheck){
+                                    banCheckNameArray.push(commentName);
+                                    warningArray = removeStringInArray(warningArray, commentName);
+                                }
                             }
                         }
                     }
@@ -957,6 +996,7 @@ jQuery(document).ready(function(){
             }else{//コメントが違う
                 //履歴追加
                 log("通常コメント #" + num + " " + commentName + " | " + commentText + " | " + commentTextIsEmoji);
+                warningArray = removeStringInArray(warningArray, commentName);
             }
             addComment ();
         })
