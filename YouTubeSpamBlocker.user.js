@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Spam Blocker
 // @namespace    https://monatann.azurewebsites.net/
-// @version      4.0
+// @version      4.1
 // @description  VTuberのコメント欄のスパムを自動ブロック
 // @author       monatann
 // @match        https://www.youtube.com/*
@@ -648,8 +648,10 @@ jQuery(document).ready(function(){
         if(liveURL.indexOf("&") != -1){
             liveURL = liveURL.split("&")[0];
         }
+
+        log(liveChatId);
         //URL変化していたらLive ID入手
-        if(reId || liveChatId == null){
+        if(reId || liveChatId == null || liveChatId == ""){
             jQuery.ajax({
                 url:'https://www.googleapis.com/youtube/v3/videos',
                 type:'GET',
@@ -821,6 +823,7 @@ jQuery(document).ready(function(){
     }
 
     //スパム疑いのチャンネル精査
+    //channelCheck("UCP3I3YQpscdkDNNigDBQY4A", "b");
     function channelCheck(channelId, banName){
         if(channelId != ""){
             jQuery.ajax({
@@ -828,13 +831,12 @@ jQuery(document).ready(function(){
                 timeout : 1000, // 1000 ms
                 cache: false, //キャッシュを保存するかの指定
                 success: function(html){
-                    log(html);
-                    //console.log(jQuery(html).text());
                     let htmlText = jQuery(html).text();
                     let findIndex = htmlText.indexOf("bit.ly");
                     if(findIndex != -1){
                         let link = htmlText.substr(findIndex, 20);
                         link = link.replace("bit.ly/", "");
+                        link = link.replace("bit.ly\\/", "");
                         link = link.split("\\n")[0];
                         link = link.split("\\")[0];
                         link = link.split(" ")[0];
