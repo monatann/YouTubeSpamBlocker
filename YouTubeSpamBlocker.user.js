@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Spam Blocker
 // @namespace    https://monatann.azurewebsites.net/
-// @version      3.8
+// @version      4.0
 // @description  VTuberのコメント欄のスパムを自動ブロック
 // @author       monatann
 // @match        https://www.youtube.com/*
@@ -532,6 +532,7 @@ let unBanTempArray = [];
 let tempArray = [];
 //API関係
 let work = true;
+let canUseOAuth = true;
 let apiKey;
 let idStop = "";
 let liveURL;
@@ -682,10 +683,11 @@ jQuery(document).ready(function(){
         log("OAuth確認開始");
         if(GM_config.get("useOAuth") == "false"){
             log("OAuthを使わない設定");
+            canUseOAuth = false;
             return Promise.resolve("ok");
         }
 
-        if(jQuery("body").text().indexOf('"authorExternalChannelId":"' + GM_config.get("OAuthChannelId") + '"') == -1 && location.href.indexOf("https://www.youtube.com/#access_token=") == -1){
+        if(jQuery("body").text().indexOf('"categoryId":"' + GM_config.get("OAuthChannelId") + '"') == -1 && location.href.indexOf("https://www.youtube.com/#access_token=") == -1){
             log("OAuthチャンネル不一致: /channel/" + GM_config.get("OAuthChannelId"));
             return Promise.resolve("ok");
         }
@@ -749,10 +751,9 @@ jQuery(document).ready(function(){
                         detail = item.authorDetails;
                         if(item.id != apiLastCommentId){
                             //権限持ちやスポンサー等は除外
-                            if(detail.isVerified || detail.isChatOwner || detail.isChatSponsor || detail.isChatModerator){
+                            if((detail.isVerified || detail.isChatOwner || detail.isChatSponsor || detail.isChatModerator) && !find(forceUnBanNameArray, detail.displayName)){
                                 log("権限/スポンサー確認, 信頼ユーザー行き: " + detail.displayName);
                                 forceUnBanNameArray.push(detail.displayName);
-                                banCheckNameArray = removeStringInArray(banCheckNameArray, detail.displayName);
                                 continue;
                             }
                             let nowTime = new Date(item.snippet.publishedAt).getTime();
@@ -838,6 +839,7 @@ jQuery(document).ready(function(){
                         link = link.split("\\")[0];
                         link = link.split(" ")[0];
                         link = link.split("&")[0];
+                        link = removeEmojisStr(link);
                         channelCheckPost(channelId, banName, link);
                     }else{
                         forceUnBanNameArray.push(banName);
@@ -884,6 +886,10 @@ jQuery(document).ready(function(){
     }
 
     function banSpamAction(channelId){
+        if(!canUseOAuth){
+            log("OAuth使用権限無し");
+            return;
+        }
         let gettoken = GM_config.get('OAuthAccessToken');
 
         let headers = {};
@@ -1131,6 +1137,14 @@ jQuery(document).ready(function(){
             return commentText;
         }
         return commentText.replace(regex, '').replace(/\s+/g, "").replace(" ", "");
+    }
+
+    //絵文字除去
+    function removeEmojisStr (str) {
+        if(str == "" || str == null){
+            return str;
+        }
+        return str.replace(regex, '').replace(/\s+/g, "").replace(" ", "");
     }
 
     //配列内に存在
