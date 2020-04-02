@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Spam Blocker
 // @namespace    https://monatann.azurewebsites.net/
-// @version      3.7
+// @version      3.8
 // @description  VTuberのコメント欄のスパムを自動ブロック
 // @author       monatann
 // @match        https://www.youtube.com/*
@@ -9,12 +9,51 @@
 // @require      https://monatann.azurewebsites.net/files/nicoaddon/script/jquery-3.2.1.js
 // @require      https://monatann.azurewebsites.net/files/nicoaddon/GM_config.js
 // @require      https://monatann.azurewebsites.net/files/nicoaddon/script/vegas.js
-// @require      https://apis.google.com/js/api.js
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
 // @grant        none
 // ==/UserScript==
+
+/* --------------- 使用ライブラリ -------------------
+1．jQuery
+https://jquery.com/
+Includes Sizzle.js
+https://sizzlejs.com/
+Copyright JS Foundation and other contributors
+Released under the MIT license
+https://jquery.org/license
+
+2. GM Config
+Copyright 2009+, GM_config Contributors (https://github.com/sizzlemctwizzle/GM_config)
+GM_config Contributors:
+    Mike Medley <medleymind@gmail.com>
+    Joe Simmons
+    Izzy Soft
+    Marti Martz
+
+GM_config is distributed under the terms of the GNU Lesser General Public License.
+
+    GM_config is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+3. Vegas
+Copyright (C) 2010-2017 Jay Salvat
+http://jaysalvat.com/
+v2.4.0 - built 2017-01-04
+Licensed under the MIT License.
+http://vegas.jaysalvat.com/
+------------------------------------------------*/
 
 /* --------------- 参考サイト -------------------
 https://gist.github.com/yuta0801/2e3cd3581f078d4a0f68ff3e3953c513
@@ -157,6 +196,12 @@ GM_config.init(
                 'label': 'コメント保持数', // Appears next to field
                 'type': 'text', // Makes this setting a text field
                 'default': '300' // Default value if user doesn't change it
+            },
+            'live_consecutive': // This is the id of the field
+            {
+                'label': 'BANする連投コメント数(以上, 5秒内連投で警告+1, 20秒ごとの警告数判断)', // Appears next to field
+                'type': 'text', // Makes this setting a text field
+                'default': '3' // Default value if user doesn't change it
             },
             'live_emoji': // This is the id of the field
             {
@@ -453,7 +498,7 @@ let apiKeyList = [];
 //文字が見にくくなると思うので元画像に少し白を透明に混ぜるといい感じになるでしょう ←元のHTMLの色を変えてそのままでも大丈夫に
 //背景画像のスライドの数を増やしたい場合、//～ 背景画像挿入 ～の部分を同じように変えればok
 let allow_change_bg_picture = GM_config.get('bgallow');
-let delay_time = GM_config.get('bgdelay')  * 1000;
+let delay_time = GM_config.get('bgdelay') * 1000;
 let background_picture1 = GM_config.get('bg1');
 let background_picture2 = GM_config.get('bg2');
 let background_picture3 = GM_config.get('bg3');
@@ -556,7 +601,17 @@ jQuery(document).ready(function(){
             }
         }
 
-        if(location.href.indexOf("live_chat") != -1){
+        if(location.href.indexOf("https://github.com/monatann/YouTubeSpamBlocker#access_token=") != -1){
+            let url = location.href.split("access_token=")[1];
+            let url2 = url.split("&token_type=")[0];
+
+            location.href = "https://www.youtube.com#access_token=" + url2;
+        }else if(location.href.indexOf("access_token=") != -1){
+            let url = location.href.split("access_token=")[1];
+            log("OAuthトークン取得完了: " + url);
+            GM_config.set('OAuthAccessToken', url);
+            GM_config.save();
+        }else if(location.href.indexOf("live_chat") != -1){
             commentInterval(1000);
             apiInterval(20000);
             oauthKeepInterval(1200000);
@@ -622,39 +677,41 @@ jQuery(document).ready(function(){
         return Promise.resolve("ok");
     }
 
+    let firstOAuth = true;
     function oauth(){
+        log("OAuth確認開始");
         if(GM_config.get("useOAuth") == "false"){
+            log("OAuthを使わない設定");
             return Promise.resolve("ok");
         }
-        if(location.href.indexOf("https://github.com/monatann/YouTubeSpamBlocker#access_token=") != -1){//2. GitHUbのページに飛ばしトークン取得
-            let url = location.href.split("access_token=")[1];
-            let url2 = url.split("&token_type=")[0];
 
-            location.href = "https://www.youtube.com#access_token=" + url2;
-        }else if(jQuery("#guide").attr("class") == "style-scope ytd-app"){
-            if("/channel/" + GM_config.get("OAuthChannelId") != jQuery("#text > a").attr("href") && location.href.indexOf("https://www.youtube.com/#access_token=") == -1){
-                return Promise.resolve("ok");
-            }
-            if(location.href.indexOf("https://www.youtube.com/#access_token=") != -1){//3. YouTubeに戻してトークン取得
-                let url = location.href.split("access_token=")[1];
-                GM_config.set('OAuthAccessToken', url);
-                GM_config.save();
-            }else if(location.href.indexOf("https://www.youtube.com") != -1){//1. 認証画面表示
-                $.ajax({//4. 認証情報表示
-                    type: 'POST',
-                    url: 'https://www.googleapis.com/oauth2/v1/tokeninfo',
-                    data: {
-                        "access_token": GM_config.get('OAuthAccessToken'),
-                    },
-                }).done( (response) => {
-                    if(response.expires_in > 0){
-                        log("トークン有効確認, 残り " + response.expires_in + " 秒");
-                    }
-                })
-                    .fail( (data) => {
+        if(jQuery("body").text().indexOf('"authorExternalChannelId":"' + GM_config.get("OAuthChannelId") + '"') == -1 && location.href.indexOf("https://www.youtube.com/#access_token=") == -1){
+            log("OAuthチャンネル不一致: /channel/" + GM_config.get("OAuthChannelId"));
+            return Promise.resolve("ok");
+        }
+        if(location.href.indexOf("https://www.youtube.com") != -1){//1. 認証画面表示
+            log("OAuth問い合わせ開始 Token: " + GM_config.get('OAuthAccessToken'));
+            $.ajax({//4. 認証情報表示
+                type: 'POST',
+                url: 'https://www.googleapis.com/oauth2/v1/tokeninfo',
+                data: {
+                    "access_token": GM_config.get('OAuthAccessToken')
+                },
+            }).done( (response) => {
+                if(response.expires_in > 0){
+                    log("トークン有効確認, 残り " + response.expires_in + " 秒");
+                }
+            })
+                .fail( (data) => {
+                log(data);
+                if(firstOAuth){
+                    log("OAuth最新トークン取得開始");
+                    firstOAuth = false;
                     window.open("https://accounts.google.com/o/oauth2/auth?client_id=" + GM_config.get('OAuthClientId') + "&redirect_uri=https://github.com/monatann/YouTubeSpamBlocker&scope=https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl&response_type=token");
-                })
-            }
+                }else{
+                    log("OAuth最新トークン取得待機中");
+                }
+            })
         }
         return Promise.resolve("ok");
     }
@@ -668,17 +725,21 @@ jQuery(document).ready(function(){
                 type:'GET',
                 data:{
                     'liveChatId':liveChatId,
-                    'part':"authorDetails",
+                    'part':"authorDetails,snippet",
                     'hl':"ja",
                     'maxResults':2000,
                     'key':apiKey
                 }
             })
                 .done( (rawdata) => {
-                let promiseCalls = []
+                log(rawdata);
+                //let promiseCalls = []
                 let items = rawdata.items;
                 let item;
                 let detail;
+                let index;
+                let consecutive = new Map();
+                let consecutiveComment = [];
 
                 log("BAN確認, 残り " + banCheckNameArray.length);
 
@@ -687,7 +748,24 @@ jQuery(document).ready(function(){
                         item = items[i-1];
                         detail = item.authorDetails;
                         if(item.id != apiLastCommentId){
-                            let index = findIndex(banCheckNameArray, detail.displayName);
+                            //権限持ちやスポンサー等は除外
+                            if(detail.isVerified || detail.isChatOwner || detail.isChatSponsor || detail.isChatModerator){
+                                log("権限/スポンサー確認, 信頼ユーザー行き: " + detail.displayName);
+                                forceUnBanNameArray.push(detail.displayName);
+                                banCheckNameArray = removeStringInArray(banCheckNameArray, detail.displayName);
+                                continue;
+                            }
+                            let nowTime = new Date(item.snippet.publishedAt).getTime();
+                            if(!consecutive.has(detail.displayName)){
+                                consecutive.set(detail.displayName, nowTime);
+                            }else{
+                                let lastTime = consecutive.get(detail.displayName);
+                                if(lastTime - nowTime < 5000){
+                                    log("5秒以内の連投確認: " + detail.displayName);
+                                    consecutiveComment.push(item);
+                                }
+                            }
+                            index = findIndex(banCheckNameArray, detail.displayName);
                             if(index != -1){
                                 index++;
                                 channelCheck(detail.channelId, detail.displayName);
@@ -697,7 +775,24 @@ jQuery(document).ready(function(){
                         }else{
                             break;
                         }
-                    }catch(e){continue;}
+                    }catch(e){
+                        log(e);
+                        continue;
+                    }
+                }
+
+                for (let i =0; i < consecutiveComment.length; i++) {
+                    let detail = consecutiveComment[i].authorDetails;
+                    let checkName = detail.displayName;
+                    if(!find(forceBanNameArray, checkName)){
+                        let foundNum = wordNumInArray(consecutiveComment, checkName);
+                        if(foundNum >= Number(GM_config.get("live_consecutive"))){
+                            log(foundNum + " 回の連投確認, BAN: " + checkName);
+                            banSpamAction(detail.channelId);
+                            forceBanNameArray.push(checkName);
+                            banCheckNameArray = removeStringInArray(banCheckNameArray, detail.displayName);
+                        }
+                    }
                 }
 
                 removeTaskInArray();
@@ -732,6 +827,7 @@ jQuery(document).ready(function(){
                 timeout : 1000, // 1000 ms
                 cache: false, //キャッシュを保存するかの指定
                 success: function(html){
+                    log(html);
                     //console.log(jQuery(html).text());
                     let htmlText = jQuery(html).text();
                     let findIndex = htmlText.indexOf("bit.ly");
@@ -741,6 +837,7 @@ jQuery(document).ready(function(){
                         link = link.split("\\n")[0];
                         link = link.split("\\")[0];
                         link = link.split(" ")[0];
+                        link = link.split("&")[0];
                         channelCheckPost(channelId, banName, link);
                     }else{
                         forceUnBanNameArray.push(banName);
@@ -834,6 +931,7 @@ jQuery(document).ready(function(){
         })
             .fail( (data) => {
             log("BAN失敗しました: " + channelId);
+            log(data);
         });
     }
 
@@ -992,6 +1090,7 @@ jQuery(document).ready(function(){
                         }
                     }
                 }else{//同じ人
+
                 }
             }else{//コメントが違う
                 //履歴追加
@@ -1008,7 +1107,6 @@ jQuery(document).ready(function(){
         if(index + 1 < apiKeyList.length){
             log("YouTubeAPI制限 or 生放送ではない, APIキーを" + apiKey + " -> " + apiKeyList[index + 1] + " に変更");
             apiKey = apiKeyList[index + 1];
-            banCheck();
         }else{
             log("YouTubeAPI制限 or 生放送ではない, 動作停止");
             work = false;
@@ -1102,6 +1200,17 @@ jQuery(document).ready(function(){
         return false;
     }
 
+    //配列内に文字が何回あるか
+    function wordNumInArray(array, str){
+        let total = 0;
+        for(let i = 0; i < array.length; i++){
+            if(str.indexOf(array[i].authorDetails.displayName) != -1){
+                total++;
+            }
+        }
+        return total;
+    }
+
     //コメント追加
     function addComment () {
         if(nameArray.length > keepCommentLimit){
@@ -1182,8 +1291,10 @@ jQuery(document).ready(function(){
 
     //ポップアップ要素適用
     function ApplyPopup(){
-        CssBg("body > ytd-app > ytd-popup-container > iron-dropdown > #contentWrapper > ytd-multi-page-menu-renderer", bgcolor4);
-        CssBg("body > ytd-app > ytd-popup-container > iron-dropdown > #contentWrapper > ytd-multi-page-menu-renderer > #header > ytd-active-account-header-renderer","hsla(0, 100%, 50%, 0)");
+        if(changeColor == "true"){
+            CssBg("body > ytd-app > ytd-popup-container > iron-dropdown > #contentWrapper > ytd-multi-page-menu-renderer", bgcolor4);
+            CssBg("body > ytd-app > ytd-popup-container > iron-dropdown > #contentWrapper > ytd-multi-page-menu-renderer > #header > ytd-active-account-header-renderer","hsla(0, 100%, 50%, 0)");
+        }
     };
 
     //中央メイン要素適用
@@ -1250,7 +1361,8 @@ jQuery(document).ready(function(){
 
     //フブキを推していけ~~!
     if(location.href.indexOf("live_chat") == -1){
-        console.log("狐じゃい!");
+        console.log("https://twitter.com/shirakamifubuki/status/1245004193812774915");
+        console.log("白上はネコです");
         console.log("                                            `  ..");
         console.log("                                  `     `         `       `     `    `     `       `");
         console.log("                        .                             .");
