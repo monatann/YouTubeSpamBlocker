@@ -39,7 +39,7 @@ public class Window extends JFrame {
 	public static JMenuItem license = new JMenuItem(new LicenseEvent());
 
 	public static void displayWindow() {
-		Window frame = new Window("YouTube Spam Blocker");
+		Window frame = new Window("YouTube Spam Blocker v" + Main.version);
 		frame.setVisible(true);
 	}
 
